@@ -12,6 +12,7 @@ Class.name = "Class"
 ---As an object contains operations of the `Class` type.
 ---
 ---@class (exact) Class
+---@field private __super? Class
 ---@field public name string
 ---@field public prototype table
 ---@field public mt Metatable
@@ -39,7 +40,11 @@ setmetatable(Class, Class.mt)
 ---
 ---If the `__init` is not defined, then initialization will be empty.
 ---
----The access modifier of the `__init` prototype method should be `private`.
+---The `__init` of the superclass must be called in the `__init` of the subclass.
+---
+---The access modifier of the `__init` method
+---should be `private` if the class is final
+---and `protected` if the class can be extended.
 ---
 ---When the class is created,
 ---the exact type signature of the constructor can be specified
@@ -75,6 +80,58 @@ function Class.prototype:new(...)
     instance:__init(...)
 
     return instance
+end
+
+---Gets the superclass of this class.
+---
+---Returns `nil` if the class has no superclass.
+---
+---@public
+---@return Class?
+function Class.prototype:super()
+    return self.__super
+end
+
+---Checks if this class is a subclass of the provided class.
+---
+---Returns `true` if classes are the same.
+---
+---@public
+---@param super Class
+---@return boolean
+function Class.prototype:is_sub(super)
+    ---@type Class?
+    local sub = self
+    while sub ~= nil do
+        if sub == super then
+            return true
+        end
+
+        sub = sub:super()
+    end
+
+    return false
+end
+
+---Checks if this class is a superclass of the provided class.
+---
+---Returns `true` if classes are the same.
+---
+---@public
+---@param sub Class
+---@return boolean
+function Class.prototype:is_super(sub)
+    ---@type Class?
+    local super = sub
+    while super ~= nil do
+        if self == super then
+            return true
+        end
+
+        super = super:super()
+    end
+
+    return false
 end
 
 ---A function that does nothing.
@@ -190,6 +247,83 @@ function Class:of(instance)
     if mt == nil then return nil end
 
     return mt.__class
+end
+
+---Creates a new class that is a subclass for the provided one.
+---
+---`__init` of the subclass must call the `__init` of the superclass.
+---
+---Instances of the subclass will inherit all the instance methods and fields of the superclass.
+---
+---```lua
+------@class (exact) ObjectClass : Class
+------@field public new fun(self: self, point: Point): Object
+---local Object = Class:new("Object")
+---
+------@class (exact) Object
+------@field protected _position Point
+---Object.prototype = Object.prototype
+---
+------@protected
+------@param position Point
+------@return void
+---function Object.prototype:__init(position)
+---    self._position = position
+---end
+---
+------@public
+------@return Point
+---function Object.prototype:position()
+---    return self._position
+---end
+---
+------@class (exact) ManagerClass : Class
+------@field public new fun(self: self, position: Point, radius: integer): Circle
+---local Circle = Class:extend(Object, "Circle")
+---
+------@class (exact) Circle : Object
+------@field private _radius integer
+---Circle.prototype = Circle.prototype
+---
+------@private
+------@param position Point
+------@param radius integer
+------@return void
+---function Circle.prototype:__init(position, radius)
+---    Object.prototype.__init(self, position)
+---    self._radius = radius
+---end
+---
+------@public
+------@return number
+---function Circle.prototype:area()
+---    return math.pi * self._radius * self._radius
+---end
+---
+---
+---local circle = Circle:new(Point:new(1, 2), 10)
+---print("Circle position before:", circle:position().x, circle:position().y)
+---circle:move_to(Point:new(3, 4))
+---print("Circle position after:", circle:position().x, circle:position().y)
+---print("Circle area:", circle:area())
+---```
+---
+---@public
+---@param super Class
+---@param name string
+---@return Class
+function Class:extend(super, name)
+    local class = setmetatable({}, self.mt)
+    ---@diagnostic disable-next-line: access-invisible
+    class.__super = super
+    class.name = name
+    class.prototype = setmetatable({}, { __index = super.prototype })
+    class.mt = {
+        __class = class,
+        __index = class.prototype,
+    }
+
+    return class
 end
 
 M.Class = Class
